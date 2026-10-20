@@ -52,10 +52,10 @@ func at(_ year: Int, _ month: Int, _ day: Int, _ hour: Int = 12, _ minute: Int =
 /// care turn them on.
 func makePair(at now: Date = at(2026, 11, 1)) -> (a: Engine, b: Engine) {
     var stateA = EngineState()
-    stateA.settings.myName = "Surya"
+    stateA.settings.myName = "Alex"
     stateA.settings.quietHoursOn = false
     var stateB = EngineState()
-    stateB.settings.myName = "Riya"
+    stateB.settings.myName = "Sam"
     stateB.settings.quietHoursOn = false
     let a = Engine(state: stateA, deviceID: UUID(), calendar: ist)
     let b = Engine(state: stateB, deviceID: UUID(), calendar: ist)

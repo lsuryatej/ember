@@ -9,7 +9,7 @@ func runEngineTests() {
 
         let got = deliver(sent, to: b, at: t.addingTimeInterval(2))
         let alert = alerts(got).first
-        equal(alert?.title, "Surya", "titled with the sender's name, learned from hello")
+        equal(alert?.title, "Alex", "titled with the sender's name, learned from hello")
         equal(alert?.body, "🌶️ Thinking about you", "default wording")
         equal(alert?.category, .pingDistance, "carries the long-distance reply buttons")
         equal(alert?.sound, "Pop", "each level has its own sound")
@@ -25,10 +25,10 @@ func runEngineTests() {
     suite("Your own wording travels with the ping") {
         let (a, b) = makePair()
         var settings = a.state.settings
-        settings.labels[Level.spicier.rawValue] = "  Boner alert 🍆  "
+        settings.labels[Level.spicier.rawValue] = "  Thinking of you, a lot  "
         _ = a.updateSettings(settings, at: at(2026, 11, 2))
         let got = deliver(try! a.send(.spicier, at: at(2026, 11, 2, 22)), to: b, at: at(2026, 11, 2, 22))
-        equal(alerts(got).first?.body, "🌶️🌶️ Boner alert 🍆", "they read exactly what you wrote, trimmed")
+        equal(alerts(got).first?.body, "🌶️🌶️ Thinking of you, a lot", "they read exactly what you wrote, trimmed")
 
         settings.labels[Level.spicier.rawValue] = String(repeating: "x", count: 500)
         _ = a.updateSettings(settings, at: at(2026, 11, 2, 23))
@@ -277,14 +277,14 @@ func runEngineTests() {
     suite("Saved state survives new and missing fields") {
         let settings = try? JSONDecoder().decode(Settings.self, from: Data("{}".utf8))
         equal(settings, Settings(), "empty settings decode to defaults")
-        let partial = try? JSONDecoder().decode(Settings.self, from: Data(#"{"myName":"Surya","hotKey":"someFutureKey"}"#.utf8))
-        equal(partial?.myName, "Surya", "known fields are kept")
+        let partial = try? JSONDecoder().decode(Settings.self, from: Data(#"{"myName":"Alex","hotKey":"someFutureKey"}"#.utf8))
+        equal(partial?.myName, "Alex", "known fields are kept")
         equal(partial?.hotKey, .controlOptionE, "an unknown value falls back instead of failing")
         let state = try? JSONDecoder().decode(EngineState.self, from: Data(#"{"away":true}"#.utf8))
         equal(state?.away, true, "engine state decodes from a partial file")
 
         var full = EngineState()
-        full.settings.myName = "Surya"
+        full.settings.myName = "Alex"
         full.busyUntil = Date(timeIntervalSince1970: 1_800_000_000)
         full.history = [HistoryEntry(id: UUID(), at: Date(timeIntervalSince1970: 1_800_000_000), fromMe: true, kind: .ping, text: "🌶️ hi")]
         let data = try! JSONEncoder().encode(full)

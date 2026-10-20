@@ -33,8 +33,8 @@ func spin(_ seconds: TimeInterval, until done: () -> Bool) -> Bool {
 let secret = PairSecret.generate()
 print("topic \(secret.topic) on \(secret.server)")
 
-let surya = Engine(deviceID: UUID())
-let riya = Engine(deviceID: UUID())
+let alex = Engine(deviceID: UUID())
+let sam = Engine(deviceID: UUID())
 
 let sender = NtfyTransport(server: secret.server, topic: secret.topic, lastEventID: nil)
 let receiver = NtfyTransport(server: secret.server, topic: secret.topic, lastEventID: nil)
@@ -54,12 +54,12 @@ func publish(_ envelope: Envelope) -> Bool {
     return result == true
 }
 
-let ping = published(try! surya.send(.spicier, at: Date()))
+let ping = published(try! alex.send(.spicier, at: Date()))
 check(ping.count == 1 && publish(ping[0]), "a sealed ping publishes")
 check(spin(20) { arrived.count == 1 }, "and arrives on the other Mac")
 check(arrived.first == ping.first, "byte for byte")
 
-let effects = arrived.first.map { riya.receive($0, at: Date()) } ?? []
+let effects = arrived.first.map { sam.receive($0, at: Date()) } ?? []
 check(effects.contains { if case .notify = $0 { return true } else { return false } }, "and the engine turns it into a notification")
 
 print("\nlive: catching up after being offline")
@@ -83,8 +83,8 @@ check(arrived.contains(missed), "including the reply")
 // server; what matters is that a repeat does nothing on this side.
 let repeats = arrived.filter { $0 != missed }
 print("  info resume delivered \(arrived.count) message(s), \(repeats.count) already seen")
-check(repeats.allSatisfy { riya.receive($0, at: Date()).isEmpty }, "anything already seen is ignored, so nothing buzzes twice")
-check(!riya.receive(missed, at: Date()).isEmpty, "while the missed reply still lands")
+check(repeats.allSatisfy { sam.receive($0, at: Date()).isEmpty }, "anything already seen is ignored, so nothing buzzes twice")
+check(!sam.receive(missed, at: Date()).isEmpty, "while the missed reply still lands")
 resumed.stop()
 
 print("\nlive: junk on the topic")

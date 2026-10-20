@@ -40,13 +40,13 @@ func runWireTests() {
 
     suite("Every payload survives the wire") {
         let snapshot = Snapshot(
-            name: "Riya", busyUntil: Date(timeIntervalSince1970: 1_800_000_000), away: true,
+            name: "Sam", busyUntil: Date(timeIntervalSince1970: 1_800_000_000), away: true,
             presenceAt: Date(timeIntervalSince1970: 1_799_999_000), quietHours: .default,
             visit: VisitState(plan: VisitPlan(start: Date(timeIntervalSince1970: 1_801_000_000), end: Date(timeIntervalSince1970: 1_801_300_000)), updatedAt: Date(timeIntervalSince1970: 1_799_000_000))
         )
         let payloads: [Payload] = [
             .ping(.missYou, label: nil),
-            .ping(.spicier, label: "Boner alert 🍆"),
+            .ping(.spicier, label: "Thinking of you, a lot"),
             .reply(.giveMe20, to: UUID()),
             .received(UUID()),
             .snapshot(snapshot, wantsReply: true),
@@ -61,7 +61,7 @@ func runWireTests() {
 
     suite("Messages fit ntfy's 4 KB limit") {
         let secret = PairSecret.generate()
-        let label = String(repeating: "🍆", count: 80)
+        let label = String(repeating: "🌶️", count: 80)
         let ping = Envelope(id: UUID(), from: UUID(), sentAt: Date(), payload: .ping(.fire, label: label))
         check(try! secret.seal(ping).utf8.count < 4096, "a ping with the longest label")
         let snapshot = Snapshot(
@@ -128,7 +128,7 @@ func runWireTests() {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathComponent("state.json")
         var store = Store()
         store.pair = PairSecret.generate()
-        store.engine.settings.myName = "Surya"
+        store.engine.settings.myName = "Alex"
         store.lastEventID = "abc"
         store.save(to: url)
         let loaded = Store.load(from: url)

@@ -13,7 +13,7 @@ sees ciphertext.
 | | |
 |---|---|
 | **Four pings** | 💛 Miss you · 🌶️ Thinking about you · 🌶️🌶️ In the mood · 🔥 Call me. Now. Each has its own sound, so you know which one it is without looking. |
-| **Your own words** | Settings → *What your pings say*. Your wording travels with the ping, so they read exactly what you wrote. (Yes, 🌶️🌶️ can say "Boner alert 🍆".) |
+| **Your own words** | Settings → *What your pings say*. Your wording travels with the ping, so they read exactly what you wrote. |
 | **Reply from the notification** | 📞 FaceTime now (starts the call) · ⏳ Give me 20 (both Macs nudge you in 20 min) · 😏 Same · 🌧️ Rain check (lands silently) |
 | **It's a match** | If you both ping within 15 minutes of each other, you both get "It's a match 🔥" with a FaceTime button. Two 💛 make a softer match. |
 | **✓ / ✓✓** | One tick when your ping is sent, two once it reaches their Mac. |
@@ -39,8 +39,10 @@ next to the flame.
 You need macOS 14 or later. The app is universal (Apple Silicon and Intel).
 
 1. Download the latest **Ember** artifact from the
-   [Ember workflow runs](https://github.com/lsuryatej/jot/actions/workflows/ember.yml)
-   (open the newest green run, scroll to *Artifacts*). Unzip it.
+   [CI runs](https://github.com/lsuryatej/ember/actions/workflows/ci.yml)
+   (open the newest green run, scroll to *Artifacts*). Unzip it. The repo is
+   private, so only you can download it: send the unzipped folder to the
+   other Mac.
 2. In Terminal: `bash ~/Downloads/Ember/install.sh` (adjust the path to wherever it unzipped).
 
 That's the whole install. The script puts Ember in Applications and clears
@@ -48,7 +50,7 @@ the quarantine flag. Ember is ad-hoc signed, not notarized, so without that
 step macOS refuses to open it. For the other Mac, AirDrop or message the
 same unzipped folder and run the same command there.
 
-Building from source instead: `./ember/build.sh && ./ember/install.sh`
+Building from source instead: `./build.sh && ./install.sh`
 (needs Xcode).
 
 ### First launch
@@ -116,14 +118,14 @@ other. (Only the first copy gets the hotkey.)
 ## Development
 
 ```bash
-./ember/test.sh          # 138 offline checks: engine, crypto, wire format, parser, storage
-./ember/test.sh --live   # real round trips through ntfy.sh, including catch-up after going offline
-./ember/build.sh         # Ember.app, universal, ad-hoc signed
-./ember/smoke.sh         # launches the built app and plays "the other Mac" against it
+./test.sh                # 138 offline checks: engine, crypto, wire format, parser, storage
+./test.sh --live         # real round trips through ntfy.sh, including catch-up after going offline
+./build.sh               # Ember.app, universal, ad-hoc signed
+./smoke.sh               # launches the built app and plays "the other Mac" against it
 ```
 
-Every push to the `ember` branch runs all four on a GitHub macOS runner
-(`.github/workflows/ember.yml`) and uploads the zipped app.
+Every push to `main` runs all four on a GitHub macOS runner
+(`.github/workflows/ci.yml`) and uploads the zipped app.
 
 | File | |
 |---|---|
@@ -134,16 +136,3 @@ Every push to the `ember` branch runs all four on a GitHub macOS runner
 | `src/AppModel.swift` | Glue: carries out effects, saves state, tracks presence. |
 | `src/MenuView.swift` | The menu bar popover. |
 | `src/AppDelegate.swift` | Status item, glow, pair links. |
-
-### Moving it to its own repo
-
-Ember lives in `ember/` on Jot's `ember` branch because a new repo couldn't
-be created from the session that built it. To split it out with history:
-
-```bash
-git subtree split --prefix=ember -b ember-only
-# create an empty private repo (e.g. lsuryatej/ember), then:
-git push git@github.com:lsuryatej/ember.git ember-only:main
-```
-
-Then copy `.github/workflows/ember.yml` across and drop the `ember/` prefixes from it.

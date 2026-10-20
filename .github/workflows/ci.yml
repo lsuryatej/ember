@@ -1,0 +1,55 @@
+name: Ember
+
+# Builds, tests, and packages Ember on a real Mac, and uploads the zipped app
+# as a workflow artifact.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+
+      - name: Unit tests
+        run: ./test.sh
+
+      - name: Build
+        run: ./build.sh
+
+      - name: Check the bundle
+        run: |
+          lipo -archs Ember.app/Contents/MacOS/Ember | grep -q "x86_64 arm64" || {
+            echo "::error::Ember is not universal: $(lipo -archs Ember.app/Contents/MacOS/Ember)"; exit 1; }
+          codesign --verify --verbose Ember.app
+          plutil -lint Ember.app/Contents/Info.plist
+          test -s Ember.app/Contents/Resources/AppIcon.icns
+
+      - name: Live round trip through ntfy.sh
+        run: ./test.sh --live
+
+      - name: Smoke test the real app
+        run: ./smoke.sh
+
+      - name: Package
+        run: |
+          VERSION="$(plutil -extract CFBundleShortVersionString raw resources/Info.plist)"
+          mkdir -p dist
+          ditto -c -k --sequesterRsrc --keepParent Ember.app "dist/Ember-$VERSION.zip"
+          cp install.sh dist/
+          shasum -a 256 "dist/Ember-$VERSION.zip" | tee "dist/Ember-$VERSION.zip.sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Ember
+          path: dist/
+          retention-days: 90
