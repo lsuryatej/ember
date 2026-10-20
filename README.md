@@ -18,6 +18,8 @@ sees ciphertext.
 | **It's a match** | If you both ping within 15 minutes of each other, you both get "It's a match 🔥" with a FaceTime button. Two 💛 make a softer match. |
 | **✓ / ✓✓** | One tick when your ping is sent, two once it reaches their Mac. |
 | **Presence** | "At their Mac" / "Away · 2 hours ago", following the screen lock, so you know whether a ping will be seen now. |
+| **Tell me when they're back** | While they're away, 🔔 under their status arms a one-time "Back at their Mac" alert for when they unlock. |
+| **iPhone heads-up** | Opt in under Settings → iPhone. When a ping arrives while your Mac is locked or asleep, your iPhone gets "New ping. Open your Mac." through the free ntfy app. That's all it ever says: no level, no words, no name. Never while you're busy or in quiet hours. |
 | **Busy** | 🌙 for 1h, 3h, or until 9 am. Their pings wait silently and show up as one summary when it ends. They see "Busy until 6:00 pm" before they send. |
 | **Quiet hours** | 01:00 to 08:00 by default: pings still arrive, just without sound. The other side sees "😴 Quiet hours". |
 | **Discreet mode** | Notifications show only the emoji, for screen shares and friends looking over your shoulder. |
@@ -76,6 +78,18 @@ The link *is* the key. Anyone holding it can read and send your pings, so
 send it in a private chat and don't post it anywhere. Unpairing (Settings)
 and creating a new pair retires the old one.
 
+## iPhone heads-up (optional, per person)
+
+1. Settings → iPhone → *Alert my iPhone when I'm away from my Mac* → Save.
+2. Install **ntfy** on the iPhone (App Store, free).
+3. In Settings, **Copy topic**; on the phone, tap **+** in ntfy and paste it
+   (Universal Clipboard carries it across). Server: ntfy.sh.
+4. **Send a test** to check it arrives.
+
+The topic reaches the other Mac only inside the encrypted channel. The phone
+notification itself is not encrypted (the ntfy app has to read it), which
+is why it says nothing beyond "New ping".
+
 ## Privacy
 
 - Every message is sealed with ChaChaPoly (256-bit key, bound to your
@@ -101,8 +115,12 @@ and creating a new pair retires the old one.
   handful (pings, acks, lock/unlock), so you won't get near it.
 - **Time zones:** quiet hours compare against your own clock, which is right
   while you're both on IST.
-- **Mac only for now.** An iPhone version needs the $99/yr Apple Developer
+- **Mac first.** The iPhone gets a heads-up (above), not the ping itself or
+  the reply buttons. A real iPhone app needs the $99/yr Apple Developer
   account for push notifications.
+- **Updating:** Settings shows the version and commit. If one Mac falls
+  behind in a way that matters, both menus say which one needs the new
+  build.
 
 ## Try it on one Mac
 
@@ -122,10 +140,12 @@ other. (Only the first copy gets the hotkey.)
 ./test.sh --live         # real round trips through ntfy.sh, including catch-up after going offline
 ./build.sh               # Ember.app, universal, ad-hoc signed
 ./smoke.sh               # launches the built app and plays "the other Mac" against it
+./screenshots.sh         # renders every menu state, light and dark, to screenshots/
 ```
 
-Every push to `main` runs all four on a GitHub macOS runner
-(`.github/workflows/ci.yml`) and uploads the zipped app.
+Every push runs all of these on a GitHub macOS runner
+(`.github/workflows/ci.yml`), uploads the zipped app, and publishes the
+screenshots to the [`screenshots` branch](../../tree/screenshots).
 
 | File | |
 |---|---|

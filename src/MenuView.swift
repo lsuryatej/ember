@@ -10,9 +10,12 @@ struct MenuView: View {
         case home, visit, settings
     }
 
-    init(model: AppModel, page: Page = .home) {
+    private let settingsScrollTo: String?
+
+    init(model: AppModel, page: Page = .home, settingsScrollTo: String? = nil) {
         _model = ObservedObject(wrappedValue: model)
         _page = State(initialValue: page)
+        self.settingsScrollTo = settingsScrollTo
     }
 
     var body: some View {
@@ -23,7 +26,7 @@ struct MenuView: View {
                 switch page {
                 case .home: HomeView(model: model, page: $page)
                 case .visit: VisitView(model: model, page: $page)
-                case .settings: SettingsView(model: model, page: $page)
+                case .settings: SettingsView(model: model, page: $page, scrollTo: settingsScrollTo)
                 }
             }
         }
@@ -57,12 +60,15 @@ struct HomeView: View {
             if engine.state.partner == nil, let pair = model.pair {
                 waitingCard(pair)
             }
-            visitCard(engine, phase: phase)
-            if let open = engine.openPing(at: now) {
-                replyCard(open, engine, together: phase.isTogether)
+            // Until they've joined there's no one to ping or plan with.
+            if engine.state.partner != nil {
+                visitCard(engine, phase: phase)
+                if let open = engine.openPing(at: now) {
+                    replyCard(open, engine, together: phase.isTogether)
+                }
+                pingGrid(engine, now: now, together: phase.isTogether)
+                recent(engine, now: now)
             }
-            pingGrid(engine, now: now, together: phase.isTogether)
-            recent(engine, now: now)
             footer(engine, now: now)
         }
     }
@@ -302,7 +308,7 @@ struct HomeView: View {
                     }
                 }
                 let stats = engine.weekStats(at: now)
-                Text("This week: \(stats.pings) pings · \(stats.matches) matches")
+                Text("This week: " + count(stats.pings, "ping") + " · " + count(stats.matches, "match", plural: "matches"))
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
                     .padding(.top, 2)
@@ -345,6 +351,10 @@ struct HomeView: View {
             .buttonStyle(.borderless)
             .help("Quit Ember")
         }
+    }
+
+    private func count(_ n: Int, _ one: String, plural: String? = nil) -> String {
+        "\(n) " + (n == 1 ? one : plural ?? one + "s")
     }
 
     private func relative(_ date: Date, now: Date) -> String {
@@ -422,6 +432,8 @@ struct SettingsView: View {
     @State private var draft = Settings()
     @State private var confirmUnpair = false
     @State private var phoneTest: String?
+    /// Only the screenshot renderer sets this, to show the bottom half.
+    var scrollTo: String? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -435,16 +447,21 @@ struct SettingsView: View {
                 }
                 .keyboardShortcut(.defaultAction)
             }
+            ScrollViewReader { scroller in
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     section("You") {
-                        TextField("Your name (they see this)", text: $draft.myName)
-                        TextField("Their FaceTime email or phone", text: $draft.partnerHandle)
+                        labelled("Name") {
+                            TextField("They see this", text: $draft.myName)
+                        }
+                        labelled("FaceTime") {
+                            TextField("Their email or phone", text: $draft.partnerHandle)
+                        }
                     }
                     section("What your pings say") {
                         ForEach(Level.allCases) { level in
                             HStack {
-                                Text(level.emoji).frame(width: 36, alignment: .leading)
+                                Text(level.emoji).fixedSize().frame(width: 44, alignment: .leading)
                                 TextField(level.defaultLabel(together: false), text: labelBinding(level))
                             }
                         }
@@ -465,7 +482,7 @@ struct SettingsView: View {
                         Button("Send me a test notification") { model.sendTestNotification() }
                     }
                     section("iPhone") {
-                        Toggle("Alert my iPhone when I'm away from my Mac", isOn: phoneAlertsBinding)
+                        Toggle("Nudge my iPhone when I'm away", isOn: phoneAlertsBinding)
                         if draft.phoneAlertsOn, let topic = draft.phoneTopic {
                             Text("1. Install **ntfy** from the App Store (free).\n2. Tap **+**, paste this topic, and subscribe (server ntfy.sh). Copy here, paste on the phone: Universal Clipboard carries it over.")
                                 .font(.caption)
@@ -516,11 +533,19 @@ struct SettingsView: View {
                     Text("Ember " + AppModel.buildDescription)
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
+                        .id("bottom")
                 }
                 .textFieldStyle(.roundedBorder)
                 .padding(.trailing, 6)
             }
             .frame(height: 430)
+            .onAppear {
+                // After the draft loads, which can change how tall it is.
+                if let scrollTo {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { scroller.scrollTo(scrollTo, anchor: .bottom) }
+                }
+            }
+            }
         }
         .onAppear { draft = model.state.settings }
         .confirmationDialog("Unpair from \(model.engine.partnerName)?", isPresented: $confirmUnpair) {
@@ -557,6 +582,13 @@ struct SettingsView: View {
             get: { draft.labels[level.rawValue] ?? "" },
             set: { draft.labels[level.rawValue] = $0 }
         )
+    }
+
+    private func labelled<Content: View>(_ label: String, @ViewBuilder _ field: () -> Content) -> some View {
+        HStack {
+            Text(label).frame(width: 66, alignment: .leading)
+            field()
+        }
     }
 
     private func section<Content: View>(_ title: String, @ViewBuilder _ content: () -> Content) -> some View {

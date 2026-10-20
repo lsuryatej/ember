@@ -75,6 +75,7 @@ struct Scene {
     var name: String
     var store: Store
     var page: MenuView.Page = .home
+    var settingsScrollTo: String? = nil
     var connected = true
 }
 
@@ -120,6 +121,12 @@ let scenes: [Scene] = [
         settings.phoneTopic = PairSecret.newTopic(prefix: "ember-phone-")
         _ = alex.updateSettings(settings, at: now)
     }, page: .settings),
+    Scene(name: "8b-settings-iphone", store: paired { alex, _ in
+        var settings = alex.state.settings
+        settings.phoneAlertsOn = true
+        settings.phoneTopic = PairSecret.newTopic(prefix: "ember-phone-")
+        _ = alex.updateSettings(settings, at: now)
+    }, page: .settings, settingsScrollTo: "bottom"),
     Scene(name: "9-version-warning", store: paired { alex, sam in
         var snapshot = sam.snapshot(at: now)
         snapshot.protocolVersion = Wire.protocolVersion + 1
@@ -162,7 +169,7 @@ MainActor.assumeIsolated {
 
         for dark in [false, true] {
             let appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
-            let root = MenuView(model: model, page: scene.page)
+            let root = MenuView(model: model, page: scene.page, settingsScrollTo: scene.settingsScrollTo)
                 .background(Color(nsColor: .windowBackgroundColor))
             let hosting = NSHostingView(rootView: root)
             hosting.appearance = appearance
