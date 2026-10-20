@@ -73,6 +73,16 @@ final class AppModel: ObservableObject {
     /// Without notifications a ping still plays its sound and lights the
     /// icon, but you'd never see it or its reply buttons, so the menu says so.
     @Published private(set) var notifications: Notifier.Permission = .unknown
+    /// A message from the pair decrypted but wouldn't decode: their build
+    /// is newer than this one.
+    @Published private(set) var partnerSentNewerMessage = false
+
+    static let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+    /// "0.2.0 · 1a2b3c4", for checking you're both on the same build.
+    static var buildDescription: String {
+        let commit = Bundle.main.object(forInfoDictionaryKey: "EmberCommit") as? String
+        return [appVersion ?? "dev", commit].compactMap { $0 }.joined(separator: " · ")
+    }
 
     /// The menu bar icon's glow.
     var onSignal: (() -> Void)?
@@ -97,6 +107,7 @@ final class AppModel: ObservableObject {
         let store = Store.load(from: storeURL)
         self.store = store
         self.engine = Engine(state: store.engine, deviceID: store.deviceID)
+        self.engine.appVersion = Self.appVersion
         self.state = store.engine
         self.pair = store.pair
     }
@@ -168,6 +179,7 @@ final class AppModel: ObservableObject {
         outbox = []
         unsent = 0
         engine = Engine(state: EngineState(settings: engine.state.settings), deviceID: store.deviceID)
+        engine.appVersion = Self.appVersion
         sync()
     }
 
@@ -178,6 +190,7 @@ final class AppModel: ObservableObject {
         outbox = []
         unsent = 0
         engine = Engine(state: EngineState(settings: engine.state.settings), deviceID: store.deviceID)
+        engine.appVersion = Self.appVersion
         sync()
         connect()
     }
@@ -238,6 +251,33 @@ final class AppModel: ObservableObject {
             category: .pingDistance,
             sound: Level.spicy.sound
         ))
+    }
+
+    /// For the screenshot renderer, which shows the menu without ever
+    /// connecting.
+    func showAsConnected() {
+        connection = .online
+    }
+
+    func setWatchForReturn(_ on: Bool) {
+        engine.setWatchForReturn(on)
+        run([])
+    }
+
+    /// The other person's phone gets only this: no level, no wording, no
+    /// name, since it travels unencrypted.
+    private func pushToPhone(topic: String) {
+        guard let pair else { return }
+        NtfyTransport.notify(server: pair.server, topic: topic, title: "Ember", message: "New ping. Open your Mac.") { delivered in
+            if !delivered { NSLog("Ember: the phone heads-up didn't send") }
+        }
+    }
+
+    /// Settings' "Send a test to my iPhone". Returns through `completion`
+    /// whether ntfy took it.
+    func testPhone(topic: String, completion: @escaping (Bool) -> Void) {
+        let server = pair?.server ?? PairSecret.defaultServer
+        NtfyTransport.notify(server: server, topic: topic, title: "Ember", message: "Test: this is how a ping looks on your phone.", completion: completion)
     }
 
     /// Re-read each time the menu opens: the fix happens in System Settings,
@@ -318,7 +358,11 @@ final class AppModel: ObservableObject {
 
     private func received(eventID: String, body: String) {
         store.lastEventID = eventID
-        guard let pair, let envelope = try? pair.open(body) else { return }
+        guard let pair, let plain = try? pair.openData(body) else { return }
+        guard let envelope = try? Wire.decoder().decode(Envelope.self, from: plain) else {
+            partnerSentNewerMessage = true
+            return
+        }
         run(engine.receive(envelope, at: Date()))
         sync() // even an echo of our own message moves the resume point
     }
@@ -340,6 +384,7 @@ final class AppModel: ObservableObject {
             case .schedule(let alert, let date): notifier.schedule(alert, at: date)
             case .signal: onSignal?()
             case .startFaceTime: startFaceTime()
+            case .phonePush(let topic): pushToPhone(topic: topic)
             }
         }
         sync()

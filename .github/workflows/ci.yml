@@ -4,12 +4,12 @@ name: Ember
 # as a workflow artifact.
 on:
   push:
-    branches: [main]
   pull_request:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  # write: the screenshots step pushes to the `screenshots` branch.
+  contents: write
 
 jobs:
   build:
@@ -53,3 +53,18 @@ jobs:
           name: Ember
           path: dist/
           retention-days: 90
+
+      - name: Screenshots
+        run: ./screenshots.sh shots
+
+      # On its own branch, replaced each time, so main's history stays free
+      # of binaries. Browse them at /tree/screenshots.
+      - name: Publish screenshots
+        if: github.event_name == 'push'
+        working-directory: shots
+        run: |
+          git init -q -b screenshots
+          git add .
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -q -m "Screenshots of ${GITHUB_SHA::7}"
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" screenshots

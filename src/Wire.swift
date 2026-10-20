@@ -133,6 +133,9 @@ struct VisitState: Codable, Equatable {
 }
 
 /// One person's side of the shared state, sent whenever it changes.
+///
+/// New fields must be optional: a Mac on an older build decodes the
+/// snapshot without them, and a missing one decodes as nil here.
 struct Snapshot: Codable, Equatable {
     var name: String
     var busyUntil: Date?
@@ -140,6 +143,12 @@ struct Snapshot: Codable, Equatable {
     var presenceAt: Date
     var quietHours: QuietHours?
     var visit: VisitState
+    /// Where this person's iPhone listens (the ntfy app), if they turned
+    /// phone alerts on. Only ever travels inside the encrypted channel.
+    var phoneTopic: String?
+    /// `Wire.protocolVersion` of the sending build; nil means 1.
+    var protocolVersion: Int?
+    var appVersion: String?
 }
 
 enum Payload: Codable, Equatable {
@@ -164,9 +173,15 @@ struct Envelope: Codable, Equatable {
     var payload: Payload
 }
 
+/// Bump `protocolVersion` whenever a build sends something an older build
+/// can't decode (a new `Payload` case), so the menu can say which Mac needs
+/// updating instead of messages silently going missing.
+///
 /// Dates go over as Foundation's own Double, not milliseconds: it round-trips
 /// exactly, so a message decodes equal to what was sent.
 enum Wire {
+    static let protocolVersion = 1
+
     static func encoder() -> JSONEncoder {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]

@@ -10,6 +10,11 @@ struct MenuView: View {
         case home, visit, settings
     }
 
+    init(model: AppModel, page: Page = .home) {
+        _model = ObservedObject(wrappedValue: model)
+        _page = State(initialValue: page)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if model.pair == nil {
@@ -48,6 +53,7 @@ struct HomeView: View {
         return VStack(alignment: .leading, spacing: 14) {
             header(engine, now: now)
             notificationsCard
+            versionCard
             if engine.state.partner == nil, let pair = model.pair {
                 waitingCard(pair)
             }
@@ -72,6 +78,35 @@ struct HomeView: View {
             Text(presenceLine(engine, now: now))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+            if engine.state.partner?.away == true {
+                Button(engine.state.watchForReturn ? "🔔 I'll tell you when they're back · cancel" : "🔔 Tell me when they're back") {
+                    model.setWatchForReturn(!engine.state.watchForReturn)
+                }
+                .buttonStyle(.link)
+                .font(.caption)
+            }
+        }
+    }
+
+    private var theirsIsNewer: Bool {
+        if model.partnerSentNewerMessage { return true }
+        if case .theirsIsNewer = model.engine.versionGap { return true }
+        return false
+    }
+
+    @ViewBuilder private var versionCard: some View {
+        if theirsIsNewer {
+            Text("Their Ember is newer than yours, and some of what they send can't be read here. Install the latest build.")
+                .font(.caption)
+                .foregroundStyle(.orange)
+                .fixedSize(horizontal: false, vertical: true)
+                .card()
+        } else if case .theirsIsOlder(let version) = model.engine.versionGap {
+            Text("Their Ember is older\(version.map { " (\($0))" } ?? ""). Send them the latest build so nothing you send gets lost.")
+                .font(.caption)
+                .foregroundStyle(.orange)
+                .fixedSize(horizontal: false, vertical: true)
+                .card()
         }
     }
 
@@ -234,6 +269,9 @@ struct HomeView: View {
         if engine.partnerIsQuiet(at: now) {
             return "It'll arrive without a sound."
         }
+        if engine.phoneFallbackTopic(at: now) != nil {
+            return "Their Mac is away, so their iPhone gets a heads-up too."
+        }
         if engine.state.settings.hotKey != .off {
             return "\(engine.state.settings.hotKey.display) sends \(engine.state.settings.hotKeyLevel.emoji) from anywhere."
         }
@@ -383,6 +421,7 @@ struct SettingsView: View {
     @Binding var page: MenuView.Page
     @State private var draft = Settings()
     @State private var confirmUnpair = false
+    @State private var phoneTest: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -425,6 +464,32 @@ struct SettingsView: View {
                         }
                         Button("Send me a test notification") { model.sendTestNotification() }
                     }
+                    section("iPhone") {
+                        Toggle("Alert my iPhone when I'm away from my Mac", isOn: phoneAlertsBinding)
+                        if draft.phoneAlertsOn, let topic = draft.phoneTopic {
+                            Text("1. Install **ntfy** from the App Store (free).\n2. Tap **+**, paste this topic, and subscribe (server ntfy.sh). Copy here, paste on the phone: Universal Clipboard carries it over.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Text(topic)
+                                .font(.caption.monospaced())
+                                .textSelection(.enabled)
+                            HStack {
+                                Button("Copy topic") { copyToPasteboard(topic) }
+                                Button("Send a test") {
+                                    phoneTest = "Sending…"
+                                    model.testPhone(topic: topic) { phoneTest = $0 ? "Sent. Check your phone." : "Didn't send. Online?" }
+                                }
+                                if let phoneTest {
+                                    Text(phoneTest).font(.caption).foregroundStyle(.secondary)
+                                }
+                            }
+                            Text("Your phone only ever gets \"New ping. Open your Mac.\" No level, no words, no name.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
                     section("Shortcut") {
                         Picker("Hotkey", selection: $draft.hotKey) {
                             ForEach(HotKeyChoice.allCases) { Text($0.display).tag($0) }
@@ -448,6 +513,9 @@ struct SettingsView: View {
                             Button("Unpair…", role: .destructive) { confirmUnpair = true }
                         }
                     }
+                    Text("Ember " + AppModel.buildDescription)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
                 }
                 .textFieldStyle(.roundedBorder)
                 .padding(.trailing, 6)
@@ -469,6 +537,19 @@ struct SettingsView: View {
         ForEach(Array(stride(from: 0, to: 24 * 60, by: 30)), id: \.self) { minute in
             Text(String(format: "%02d:%02d", minute / 60, minute % 60)).tag(minute)
         }
+    }
+
+    /// Turning alerts on for the first time makes the phone's topic.
+    private var phoneAlertsBinding: Binding<Bool> {
+        Binding(
+            get: { draft.phoneAlertsOn },
+            set: { on in
+                draft.phoneAlertsOn = on
+                if on && draft.phoneTopic == nil {
+                    draft.phoneTopic = PairSecret.newTopic(prefix: "ember-phone-")
+                }
+            }
+        )
     }
 
     private func labelBinding(_ level: Level) -> Binding<String> {

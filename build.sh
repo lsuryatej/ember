@@ -39,6 +39,9 @@ trap 'rm -rf "$WORK"' EXIT
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp resources/Info.plist "$APP/Contents/Info.plist"
+# The commit, shown in Settings, so you can tell whether you're both on the same build.
+COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo dev)"
+plutil -insert EmberCommit -string "$COMMIT" "$APP/Contents/Info.plist"
 
 # The icon is drawn by a script, not committed as a binary.
 "$DEVELOPER_DIR/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift" scripts/make-icon.swift "$WORK/AppIcon.iconset" >/dev/null

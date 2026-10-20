@@ -116,6 +116,23 @@ final class NtfyTransport: NSObject, URLSessionDataDelegate {
         }.resume()
     }
 
+    /// A plain ntfy notification to any topic: how a ping nudges the other
+    /// person's iPhone through the ntfy app. Unlike everything else Ember
+    /// sends this isn't encrypted (the phone app has to read it), so callers
+    /// put nothing in it worth hiding. `completion` runs on the main queue.
+    static func notify(server: URL, topic: String, title: String, message: String, completion: @escaping (Bool) -> Void) {
+        var request = URLRequest(url: server.appendingPathComponent(topic))
+        request.httpMethod = "POST"
+        request.httpBody = Data(message.utf8)
+        request.setValue(title, forHTTPHeaderField: "Title")
+        request.setValue("high", forHTTPHeaderField: "Priority")
+        request.timeoutInterval = 20
+        URLSession.shared.dataTask(with: request) { _, response, error in
+            let delivered = error == nil && (response as? HTTPURLResponse)?.statusCode == 200
+            DispatchQueue.main.async { completion(delivered) }
+        }.resume()
+    }
+
     /// Blocks until the message is sent or `timeout` passes. Only for quit,
     /// when there's no run loop left to finish an async send.
     func publishAndWait(_ body: String, timeout: TimeInterval) {

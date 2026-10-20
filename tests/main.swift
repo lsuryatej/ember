@@ -4,6 +4,7 @@ import Foundation
 
 runWireTests()
 runEngineTests()
+runFeatureTests()
 
 print("\n\(checks - failures)/\(checks) checks passed")
 if failures > 0 {

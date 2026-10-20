@@ -30,6 +30,9 @@ enum Effect: Equatable {
     /// Make the menu bar icon glow: the across-the-room signal.
     case signal
     case startFaceTime
+    /// A content-free heads-up to the other person's iPhone, via the ntfy
+    /// app, when their Mac is away. Unencrypted, so it carries nothing.
+    case phonePush(topic: String)
 }
 
 enum SendRefusal: Error, Equatable {
@@ -64,6 +67,12 @@ struct Settings: Codable, Equatable {
     var discreet = false
     var hotKey = HotKeyChoice.controlOptionE
     var hotKeyLevel = Level.spicy
+    /// Nudge your own iPhone (through the ntfy app) when a ping arrives
+    /// while your Mac is away.
+    var phoneAlertsOn = false
+    /// Where your iPhone listens. Kept when alerts are switched off, so
+    /// turning them back on doesn't mean subscribing again on the phone.
+    var phoneTopic: String? = nil
 }
 
 struct PingMark: Codable, Equatable {
@@ -104,6 +113,8 @@ struct EngineState: Codable, Equatable {
     var seen: [UUID] = []
     /// One-off visit notices already shown ("tomorrow!", "together mode on").
     var announced: [String] = []
+    /// One-shot "tell me when they're back at their Mac".
+    var watchForReturn = false
 }
 
 enum VisitPhase: Equatable {
@@ -137,6 +148,9 @@ final class Engine {
     private(set) var state: EngineState
     let deviceID: UUID
     var calendar: Calendar
+    /// This build's version, sent so the other Mac can say which of you is
+    /// out of date. Nil in tests.
+    var appVersion: String?
 
     /// Long enough to stop a held-down hotkey from sending ten pings.
     static let cooldown: TimeInterval = 60
@@ -185,7 +199,10 @@ final class Engine {
             away: state.away,
             presenceAt: state.presenceAt,
             quietHours: state.settings.quietHoursOn ? state.settings.quietHours : nil,
-            visit: state.visit
+            visit: state.visit,
+            phoneTopic: state.settings.phoneAlertsOn ? state.settings.phoneTopic : nil,
+            protocolVersion: Wire.protocolVersion,
+            appVersion: appVersion
         )
     }
 
@@ -242,6 +259,9 @@ final class Engine {
         state.lastSent = PingMark(id: envelope.id, level: level, at: now, matched: false)
 
         var effects: [Effect] = [.publish(envelope)]
+        if let topic = phoneFallbackTopic(at: now) {
+            effects.append(.phonePush(topic: topic))
+        }
         if var theirs = state.lastReceived, !theirs.matched, now.timeIntervalSince(theirs.at) <= Self.matchWindow {
             theirs.matched = true
             state.lastReceived = theirs
@@ -289,6 +309,37 @@ final class Engine {
         state.away = away
         state.presenceAt = now
         return [publishSnapshot(at: now)]
+    }
+
+    /// Arms (or cancels) a one-time notification for when they're back at
+    /// their Mac. Only meaningful while they're away; arming it while they're
+    /// already there does nothing.
+    func setWatchForReturn(_ on: Bool) {
+        state.watchForReturn = on && (state.partner?.away ?? false)
+    }
+
+    /// Their iPhone topic, when a ping should also nudge their phone: their
+    /// Mac is away, and they're neither busy nor in quiet hours.
+    func phoneFallbackTopic(at now: Date) -> String? {
+        guard let partner = state.partner, partner.away,
+              let topic = partner.phoneTopic, PairSecret.isValidTopic(topic),
+              partnerBusyUntil(at: now) == nil, !partnerIsQuiet(at: now)
+        else { return nil }
+        return topic
+    }
+
+    enum VersionGap: Equatable {
+        case theirsIsOlder(String?)
+        case theirsIsNewer(String?)
+    }
+
+    /// Which Mac needs the update, if the two builds can't fully talk.
+    var versionGap: VersionGap? {
+        guard let partner = state.partner else { return nil }
+        let theirs = partner.protocolVersion ?? 1
+        if theirs < Wire.protocolVersion { return .theirsIsOlder(partner.appVersion) }
+        if theirs > Wire.protocolVersion { return .theirsIsNewer(partner.appVersion) }
+        return nil
     }
 
     func setVisit(_ plan: VisitPlan?, at now: Date) -> [Effect] {
@@ -417,8 +468,19 @@ final class Engine {
             if changed { effects.append(.notify(visitChangedAlert(snapshot.visit.plan))) }
         }
         if sentAt >= (state.partnerAt ?? .distantPast) {
+            let wasAway = state.partner?.away ?? true
             state.partner = snapshot
             state.partnerAt = sentAt
+            if state.watchForReturn, wasAway, !snapshot.away {
+                state.watchForReturn = false
+                let late = now.timeIntervalSince(sentAt) > Self.staleAfter
+                effects.append(.notify(Alert(
+                    id: "back-" + UUID().uuidString,
+                    title: partnerName,
+                    body: late ? "Was back at their Mac at \(clock(sentAt))." : "Back at their Mac. Good moment for a ping?",
+                    sound: (late || isQuiet(at: now)) ? nil : "Ping"
+                )))
+            }
         }
 
         // A Mac that has been off sends an old visit; answering with ours is
@@ -571,7 +633,9 @@ extension Settings {
             quietHours: c.value(.quietHours, or: d.quietHours),
             discreet: c.value(.discreet, or: d.discreet),
             hotKey: c.value(.hotKey, or: d.hotKey),
-            hotKeyLevel: c.value(.hotKeyLevel, or: d.hotKeyLevel)
+            hotKeyLevel: c.value(.hotKeyLevel, or: d.hotKeyLevel),
+            phoneAlertsOn: c.value(.phoneAlertsOn, or: d.phoneAlertsOn),
+            phoneTopic: try? c.decodeIfPresent(String.self, forKey: .phoneTopic)
         )
     }
 }
@@ -594,5 +658,6 @@ extension EngineState {
         history = c.value(.history, or: history)
         seen = c.value(.seen, or: seen)
         announced = c.value(.announced, or: announced)
+        watchForReturn = c.value(.watchForReturn, or: watchForReturn)
     }
 }

@@ -17,11 +17,12 @@ struct PairSecret: Codable, Equatable {
     private static let linkPrefix = "ember://pair?code="
 
     static func generate(server: URL = defaultServer) -> PairSecret {
-        PairSecret(
-            server: server,
-            topic: "ember-" + Base64URL.encode(randomBytes(18)),
-            key: randomBytes(32)
-        )
+        PairSecret(server: server, topic: newTopic(prefix: "ember-"), key: randomBytes(32))
+    }
+
+    /// A random, unguessable ntfy topic.
+    static func newTopic(prefix: String) -> String {
+        prefix + Base64URL.encode(randomBytes(18))
     }
 
     /// What one of you copies and the other pastes. Self-contained: it
@@ -68,12 +69,18 @@ struct PairSecret: Codable, Equatable {
     /// Throws for anything not sealed with this pair's key on this topic,
     /// which is how a stray or forged message gets dropped.
     func open(_ text: String) throws -> Envelope {
+        try Wire.decoder().decode(Envelope.self, from: openData(text))
+    }
+
+    /// Decrypts without decoding. Something that decrypts but won't decode
+    /// came from your pair on a newer build, which is worth telling apart
+    /// from junk.
+    func openData(_ text: String) throws -> Data {
         guard let combined = Data(base64Encoded: text.trimmingCharacters(in: .whitespacesAndNewlines)) else {
             throw OpenError.notBase64
         }
         let box = try ChaChaPoly.SealedBox(combined: combined)
-        let plain = try ChaChaPoly.open(box, using: SymmetricKey(data: key), authenticating: Data(topic.utf8))
-        return try Wire.decoder().decode(Envelope.self, from: plain)
+        return try ChaChaPoly.open(box, using: SymmetricKey(data: key), authenticating: Data(topic.utf8))
     }
 
     enum OpenError: Error { case notBase64 }
